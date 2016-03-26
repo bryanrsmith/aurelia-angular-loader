@@ -12,7 +12,7 @@ export function configure({ aurelia }) {
 			// to get back to the module name.
 			const moduleName = address.split('/').slice(-1)[0];
 			return getAngularDirectives(moduleName);
-		}
+		},
 	});
 }
 
@@ -34,20 +34,20 @@ function findDirectivesInModule(module, injector) {
 		.filter(instruction => instruction[1] === 'directive')
 		.map(instruction => instruction[2][0])
 		.map(name => injector.get(`${name}Directive`)[0])
-		.filter(directive => directive.restrict === 'E');
+		.filter(directive => (/E/).test(directive.restrict));
 }
 
 function getCustomElements(definitions, moduleName) {
 	const elements = {};
 	for (const directiveDefinition of definitions) {
-		const name = hyphenate(directiveDefinition.name);
-		elements[name] = createDirectiveCustomElement({ directiveDefinition, name, moduleName });
+		const elementName = hyphenate(directiveDefinition.name);
+		elements[elementName] = createDirectiveCustomElement({ directiveDefinition, elementName, moduleName });
 	}
 
 	return elements;
 }
 
-function createDirectiveCustomElement({ directiveDefinition, name, moduleName }) {
+function createDirectiveCustomElement({ directiveDefinition, elementName, moduleName }) {
 	const scope = getScopeDefinition(directiveDefinition);
 	const bindables = [];
 	if (scope && typeof scope === 'object') {
@@ -61,19 +61,19 @@ function createDirectiveCustomElement({ directiveDefinition, name, moduleName })
 			name: x.name,
 			attribute: hyphenate(x.name),
 			changeHandler: 'attrChanged',
-			defaultBindingMode: x.type === '=' ? 2 : 1
+			defaultBindingMode: x.type === '=' ? 2 : 1,
 		}));
 
 	return decorators(
 		noView(),
-		customElement(name),
+		customElement(elementName),
 		...bindableDecorators
-	).on(createCustomElementClass({ directiveDefinition, name, moduleName, bindables }));
+	).on(createCustomElementClass({ elementName, moduleName, bindables }));
 }
 
 let hostId = 0;
 
-function createCustomElementClass({ directiveDefinition, name, moduleName, bindables }) {
+function createCustomElementClass({ elementName, moduleName, bindables }) {
 	return class AngularDirective {
 		static inject = [ Element ];
 
@@ -136,17 +136,15 @@ function createCustomElementClass({ directiveDefinition, name, moduleName, binda
 					};
 
 					// update the aurelia binding when a two-way angular scope property changes
-					bindables
-						.filter(x => x.type === '=')
-						.forEach(x => {
-							$scope.$watch(x.name, (newValue, oldValue) => {
-								if (newValue !== oldValue) {
-									this[x.name] = newValue;
-								}
-							});
+					for (const { name } of bindables.filter(x => x.type === '=')) {
+						$scope.$watch(name, (newValue, oldValue) => {
+							if (newValue !== oldValue) {
+								this[name] = newValue;
+							}
 						});
+					}
 				},
-				template: getTemplateHtml({ name, bindables })
+				template: getTemplateHtml({ elementName, bindables }),
 			});
 		}
 	};
